@@ -4,7 +4,7 @@
 # Author: Grégory Sainton
 # Institution: Observatoire de Paris - PSL University
 
-import os
+import os, sys
 import json
 import datetime
 
@@ -13,16 +13,26 @@ import torch
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose, Resize, ToTensor
 
-from ddpm import DDPMModel, compute_reference_quantiles
-from unet_v2 import UNetV2
-from viz import show_images, show_noising_sequence
-from galaxy_zoo_dataset import GalaxyZooDataset, custom_collate
-from gpu_utils import setup_device
-from transform_custom import AsinhStretch
+_SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_DIR = os.path.dirname(_SCRIPTS_DIR)
+_SRC_DIR = os.path.join(_PROJECT_DIR, "src")
+if _SRC_DIR not in sys.path:
+    sys.path.insert(0, _SRC_DIR)
+
+
+
+
+
+from src.ddpm import DDPMModel, compute_reference_quantiles
+from src.unet_v2 import UNetV2
+from src.viz import show_images, show_noising_sequence
+from src.galaxy_zoo_dataset import GalaxyZooDataset, custom_collate
+from src.gpu_utils import setup_device
+from src.transform_custom import AsinhStretch
 # ------------------------------------------------------------------
 # Constants
 # ------------------------------------------------------------------
-PARAMETERS_FILE = "param_GZ2.json"
+PARAMETERS_FILE = "configs/param_GZ2.json"
 N_SAMPLES = 16
 IMAGE_C, IMAGE_H, IMAGE_W = 3, 64, 64
 
@@ -32,7 +42,7 @@ IMAGE_C, IMAGE_H, IMAGE_W = 3, 64, 64
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--params", default="param_GZ2.json",
+    parser.add_argument("--params", default="configs/param_GZ2.json",
                         help="Path to the JSON parameter file.")
     parser.add_argument("--checkpoint", required=True,
                         help="Path to the model checkpoint (.pt file).")
