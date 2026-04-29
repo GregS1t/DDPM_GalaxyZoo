@@ -37,8 +37,5 @@
     "use_ema": false,
     "asinh_stretch": false,
     "asinh_scale": 0.02,
-    "attention_resolutions": [
-        8,
-        16
-    ]
+    "attention_resolutions": [8, 16]
 }
