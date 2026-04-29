@@ -111,6 +111,7 @@ def train(ddpm, train_loader, val_loader, n_epochs, optimizer, device,
     val_losses = []  # list of (epoch, loss) tuples — x axis is irregular
 
     for epoch in range(n_epochs):
+        logger.info(f"  Start epoch {epoch + 1}/{n_epochs}")
         # --- Training ---
         ddpm.train()
         train_loss = 0.0
