@@ -35,6 +35,14 @@ else:
     def make_autocast(device_type):
         return torch.cuda.amp.autocast()
 
+
+_SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_DIR = os.path.dirname(_SCRIPTS_DIR)
+_SRC_DIR = os.path.join(_PROJECT_DIR, "src")
+if _SRC_DIR not in sys.path:
+    sys.path.insert(0, _SRC_DIR)
+
+
 from ddpm import DDPMModel
 from ema import EMA
 from unet_v2 import UNetV2
@@ -46,7 +54,7 @@ from transform_custom import AsinhStretch, RandomDiscreteRotation
 # Constants
 # ------------------------------------------------------------------
 #SEED = 42
-PARAMETERS_FILE = "param_GZ2.json"
+PARAMETERS_FILE = "configs/param_GZ2.json"
 TRAIN_RATIO = 0.8
 GRAD_CLIP_NORM = 1.0
 NUM_WORKERS = 4
@@ -102,13 +110,13 @@ def train(ddpm, train_loader, val_loader, n_epochs, optimizer, device,
     train_losses = []
     val_losses = []  # list of (epoch, loss) tuples — x axis is irregular
 
-    for epoch in tqdm(range(n_epochs), desc="Epochs"):
+    for epoch in range(n_epochs):
+        logger.info(f"  Start epoch {epoch + 1}/{n_epochs}")
         # --- Training ---
         ddpm.train()
         train_loss = 0.0
 
-        for batch in tqdm(train_loader, leave=False,
-                          desc=f"Epoch {epoch + 1}/{n_epochs}"):
+        for batch in train_loader:
             if batch is None:
                 continue
 
@@ -208,10 +216,10 @@ if __name__ == "__main__":
     # --- Parameters ---
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--params", default="param_GZ2.json",
+    parser.add_argument("-p", default="../configs/param_GZ2.json",
                         help="Path to the JSON parameter file.")
     args = parser.parse_args()
-    PARAMETERS_FILE = args.params
+    PARAMETERS_FILE = args.p
 
     if not os.path.exists(PARAMETERS_FILE):
         logger.error(f"'{PARAMETERS_FILE}' not found.")
@@ -231,6 +239,7 @@ if __name__ == "__main__":
     morphology = p.get("morphology", "S")
     dataset_fraction = float(p.get("dataset_fraction", 1.0))
     run_name = p.get("run_name", "ddpm_run")
+    project_dir =p.get("project_dir")
     log_dir = p.get("log_dir", os.path.join(project_dir, "logs", "training"))
     tensorboard_dir = p.get("tensorboard_dir", os.path.join(project_dir, "logs", "tensorboard"))
 

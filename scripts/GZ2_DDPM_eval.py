@@ -21,13 +21,22 @@ from torch.utils.data import TensorDataset
 import pandas as pd
 from tqdm import tqdm
 
-from ddpm import DDPMModel
-from unet_v2 import UNetV2
-from galaxy_zoo_dataset import GalaxyZooDataset, custom_collate
-from gpu_utils import setup_device
-from viz import make_denoising_gif
-from metrics import (build_inception, extract_features, compute_fid,
+from src.ddpm import DDPMModel
+from src.unet_v2 import UNetV2
+from src.galaxy_zoo_dataset import GalaxyZooDataset, custom_collate
+from src.gpu_utils import setup_device
+from src.viz import make_denoising_gif
+from src.metrics import (build_inception, extract_features, compute_fid,
                      precision_recall, density_coverage)
+
+
+
+# Adjust sys.path to ensure src modules can be imported when running this script directly
+_SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_DIR = os.path.dirname(_SCRIPTS_DIR)
+_SRC_DIR = os.path.join(_PROJECT_DIR, "src")
+if _SRC_DIR not in sys.path:
+    sys.path.insert(0, _SRC_DIR)
 
 # ------------------------------------------------------------------
 # Constants
@@ -107,7 +116,7 @@ def save_images_to_dir(images, out_dir):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--params", default="param_GZ2.json",
+    parser.add_argument("--params", default="configs/param_GZ2.json",
                         help="Path to the JSON parameter file.")
     parser.add_argument("--checkpoint", required=True,
                         help="Path to the model checkpoint (.pt file).")
