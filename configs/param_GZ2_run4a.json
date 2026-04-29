@@ -1,0 +1,52 @@
+{
+    "verbose": true,
+    "no_train": false,
+    "test_model": true,
+
+    "seed": 42,
+    
+    "data_dir": "/home/gsainton/DATA/GALAXYZOO2",
+    "project_dir": "/home/gsainton/99_OUTPUT_CODE/DDPM_GALAXY_ZOO2",
+    "output_dir": "output_minerna/run4a",
+    "run_name": "run4a_unetv2_no_attention",
+    "catalog_file": "gz2_hart16.csv",
+    "mapping_file": "gz2_filename_mapping.csv",
+    
+    "morphology": "S",
+    "dataset_fraction": 1.0,
+    
+    "n_galaxies": 141000,
+    "n_galaxies_plot": 9,
+    "plot_subset": true,
+    
+    "batch_size": 64,
+    "n_epochs": 300,
+    "lr": 5e-05,
+    "patience": 30,
+    "warmup_epochs": 10,
+    
+    "attention_resolutions": [],
+    "asinh_stretch": true,
+    "asinh_scale": 0.02,
+    
+    "histogram_matching": false,
+    "precision_recall": true,
+    "precision_recall_k": 3,
+    
+    "n_steps": 1000,
+    "beta_start": 0.0001,
+    "beta_end": 0.02,
+    "beta_schedule": "cosine",
+    
+    "ema_decay": 0.9999,
+    
+    "val_freq": 5,
+    "save_freq": 5,
+    "plot_freq": 5,
+    
+    "carbon_estimation": false,
+    "carbon_log_dir": "/home/gsainton/CARBON_LOG",
+    "carbon_log_file": "carbon_footprint.log",
+    "training_log_file": "DDPM_galaxy_zoo2_training",
+    "density_coverage_k": 5
+}
