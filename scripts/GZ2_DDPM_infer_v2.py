@@ -23,12 +23,12 @@ if _SRC_DIR not in sys.path:
 
 
 
-from src.ddpm import DDPMModel, compute_reference_quantiles
-from src.unet_v2 import UNetV2
-from src.viz import show_images, show_noising_sequence
-from src.galaxy_zoo_dataset import GalaxyZooDataset, custom_collate
-from src.gpu_utils import setup_device
-from src.transform_custom import AsinhStretch
+from ddpm import DDPMModel, compute_reference_quantiles
+from unet_v2 import UNetV2
+from viz import show_images, show_noising_sequence
+from galaxy_zoo_dataset import GalaxyZooDataset, custom_collate
+from gpu_utils import setup_device
+from transform_custom import AsinhStretch
 # ------------------------------------------------------------------
 # Constants
 # ------------------------------------------------------------------

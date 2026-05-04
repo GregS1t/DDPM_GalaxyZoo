@@ -57,7 +57,7 @@ from transform_custom import AsinhStretch, RandomDiscreteRotation
 PARAMETERS_FILE = "configs/param_GZ2.json"
 TRAIN_RATIO = 0.8
 GRAD_CLIP_NORM = 1.0
-NUM_WORKERS = 4
+NUM_WORKERS = 2
 
 
 # ------------------------------------------------------------------
@@ -148,8 +148,8 @@ def train(ddpm, train_loader, val_loader, n_epochs, optimizer, device,
 
         # --- Validation (every val_freq epochs) ---
         if (epoch + 1) % val_freq == 0:
-            if ema is not None:
-                ema.apply()  # Use EMA weights for validation
+            #if ema is not None:
+            #    ema.apply()  # Use EMA weights for validation
             ddpm.eval()
             val_loss = 0.0
             with torch.no_grad():
@@ -162,8 +162,8 @@ def train(ddpm, train_loader, val_loader, n_epochs, optimizer, device,
                         val_loss += ddpm.compute_loss(x_0, t).item()
 
             val_loss /= len(val_loader)
-            if ema is not None:
-                ema.restore()  # Restore training weights after validation
+            #if ema is not None:
+            #    ema.restore()  # Restore training weights after validation
 
             val_losses.append((epoch + 1, val_loss))
             logger.info(f"  Validation — val_loss={val_loss:.4f}")
@@ -196,7 +196,7 @@ def train(ddpm, train_loader, val_loader, n_epochs, optimizer, device,
         ax.plot(range(1, len(train_losses) + 1), train_losses, label="Train loss")
         if val_losses:
             val_epochs, val_values = zip(*val_losses)
-            ax.plot(val_epochs, val_values, "o-", label="Val loss")
+            ax.plot(val_epochs, val_values, "-", label="Val loss")
         ax.set_xlabel("Epoch")
         ax.set_ylabel("Loss")
         ax.set_yscale("log")

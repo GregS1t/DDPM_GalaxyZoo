@@ -5,7 +5,7 @@
     "seed": 42,
     "data_dir": "/data/gsainton/GZ2_DATA/GALAXYZOO2/",
     "project_dir": "/data/gsainton/OUTPUTS/DDPM_GALAXY_ZOO2",
-    "output_dir": "output",
+    "output_dir": "output/testB",
     "log_dir": "/data/gsainton/OUTPUTS/DDPM_GALAXY_ZOO2/logs/training",
     "tensorboard_dir": "/data/gsainton/OUTPUTS/DDPM_GALAXY_ZOO2/logs/tensorboard",
     "catalog_file": "gz2_hart16.csv",

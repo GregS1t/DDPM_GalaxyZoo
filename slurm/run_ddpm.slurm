@@ -11,9 +11,12 @@
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
+export LD_PRELOAD=/minerva/gsainton/miniconda3/envs/ddpm_model/lib/libiomp5.so
+
+
 source /minerva/gsainton/miniconda3/etc/profile.d/conda.sh
 conda activate LDM_model
-export PYTHONPATH=/home/gsainton/01_CODES/DDPM_Galaxyzoo/src:$PYTHONPATH
+export PYTHONPATH=/obs/gsainton/DDPM_GalaxyZoo/src:$PYTHONPATH
 
 export PYTHONPATH=${PROJECT_DIR}/src:$PYTHONPATH
 
@@ -21,6 +24,5 @@ echo "Project dir:   ${PROJECT_DIR}"
 echo "PYTHONPATH:    ${PYTHONPATH}"
 echo "Param file:    ${PARAM_FILE:-configs/param_GZ2.json}"
 
-/minerva/gsainton/miniconda3/envs/LDM_model/bin/python \
-    ${PROJECT_DIR}/scripts//home/gsainton/01_CODES/DDPM_Galaxyzoo/scripts/GZ2_DDPM_training_v5.py \
-    --params ${PARAM_FILE:-configs/param_GZ2.json}
+/minerva/gsainton/miniconda3/envs/LDM_model/bin/python ~/DDPM_GalaxyZoo/scripts/GZ2_DDPM_training_v5.py \
+    -p ${PARAM_FILE:-configs/param_GZ2.json}
