@@ -34,3 +34,7 @@ class AsinhStretch:
 
         img_stretched = torch.asinh(img / self.scale) / torch.asinh(torch.tensor(1.0 / self.scale))
         return img_stretched.clamp(0,1)
+    
+    def inverse(self, img_stretched):
+        img = torch.sinh(img_stretched * torch.asinh(torch.tensor(1.0 / self.scale))) * self.scale
+        return img.clamp(0,1)

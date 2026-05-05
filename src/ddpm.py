@@ -8,10 +8,23 @@
 # Author: Grégory Sainton
 # Institution: Observatoire de Paris - PSL University
 
+import os
+import sys
+
 import math
 import numpy as np
 import torch
 import torch.nn as nn
+
+
+_SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_DIR = os.path.dirname(_SCRIPTS_DIR)
+_SRC_DIR = os.path.join(_PROJECT_DIR, "src")
+if _SRC_DIR not in sys.path:
+    sys.path.insert(0, _SRC_DIR)
+
+
+from transform_custom import AsinhStretch
 
 
 
@@ -230,7 +243,8 @@ class DDPMModel(nn.Module):
         return torch.mean((eps - eps_theta) ** 2)
 
     @torch.no_grad()
-    def generate(self, n_samples, c, h, w, reference_quantiles=None):
+    def generate(self, n_samples, c, h, w, reference_quantiles=None, 
+                 asinh_stretch=False, asinh_scale=1.0, histogram_matching=False):
         """
         Reverse diffusion sampling: generates images from pure noise.
 
@@ -274,6 +288,11 @@ class DDPMModel(nn.Module):
                 x_t = x_t + sigma_t * torch.randn_like(x_t)
 
         x_t = x_t.float()
+        if asinh_stretch:
+            stretcher = AsinhStretch(scale=asinh_scale)
+            x_t = stretcher.inverse(x_t)
+            
+
         if reference_quantiles is not None:
             # Histogram matching: align generated pixel distributions with the
             # real dataset distribution, per channel. This is strictly more

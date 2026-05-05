@@ -21,22 +21,22 @@ from torch.utils.data import TensorDataset
 import pandas as pd
 from tqdm import tqdm
 
-from src.ddpm import DDPMModel
-from src.unet_v2 import UNetV2
-from src.galaxy_zoo_dataset import GalaxyZooDataset, custom_collate
-from src.gpu_utils import setup_device
-from src.viz import make_denoising_gif
-from src.metrics import (build_inception, extract_features, compute_fid,
-                     precision_recall, density_coverage)
 
-
-
-# Adjust sys.path to ensure src modules can be imported when running this script directly
 _SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_DIR = os.path.dirname(_SCRIPTS_DIR)
 _SRC_DIR = os.path.join(_PROJECT_DIR, "src")
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
+
+
+from ddpm import DDPMModel
+from unet_v2 import UNetV2
+from galaxy_zoo_dataset import GalaxyZooDataset, custom_collate
+from gpu_utils import setup_device
+from viz import make_denoising_gif, show_images
+from metrics import (build_inception, extract_features, compute_fid,
+                     precision_recall, density_coverage)
+
 
 # ------------------------------------------------------------------
 # Constants
@@ -44,6 +44,7 @@ if _SRC_DIR not in sys.path:
 N_SAMPLES_FID = 1000
 N_SAMPLES_DIST = 500
 N_REAL_FID = 1000
+N_SAMPLES_GRID = 16
 BATCH_SIZE_GEN = 16
 IMAGE_C, IMAGE_H, IMAGE_W = 3, 64, 64
 
@@ -51,16 +52,18 @@ IMAGE_C, IMAGE_H, IMAGE_W = 3, 64, 64
 # ------------------------------------------------------------------
 # Pixel distribution
 # ------------------------------------------------------------------
-def plot_pixel_distribution(real_images, generated_images, save_path=None,
-                             show=True):
+def plot_pixel_distribution(real_images, generated_images, run_info,
+                             save_path=None, show=True):
     """
-    Compare the pixel intensity distributions of real vs generated images.
+    Compare pixel intensity distributions of real vs generated images.
 
     Plots one histogram per RGB channel overlaid for both sets.
+    A subtitle with run metadata is added below the main title.
 
     Args:
         real_images (torch.Tensor): Real images (N, 3, H, W) in [0, 1].
         generated_images (torch.Tensor): Generated images (N, 3, H, W) in [0, 1].
+        run_info (str): One-line summary of run conditions shown as subtitle.
         save_path (str, optional): Path to save the figure.
         show (bool): Whether to call plt.show().
     """
@@ -82,7 +85,10 @@ def plot_pixel_distribution(real_images, generated_images, save_path=None,
         ax.legend()
         ax.grid(True, alpha=0.3)
 
-    fig.suptitle("Pixel intensity distribution — Real vs Generated", fontsize=13)
+    fig.suptitle(
+        f"Pixel intensity distribution — Real vs Generated\n{run_info}",
+        fontsize=11
+    )
     plt.tight_layout()
 
     if save_path is not None:
@@ -94,8 +100,34 @@ def plot_pixel_distribution(real_images, generated_images, save_path=None,
 
 
 # ------------------------------------------------------------------
-# FID computation
+# Helpers
 # ------------------------------------------------------------------
+def build_run_info(run_name, epoch, val_loss, beta_schedule,
+                   attention_resolutions, asinh_stretch, use_ema):
+    """
+    Build a compact one-line string summarising run conditions.
+
+    Args:
+        run_name (str): Name of the run.
+        epoch (int): Checkpoint epoch.
+        val_loss (float): Validation loss at checkpoint.
+        beta_schedule (str): Noise schedule name.
+        attention_resolutions (list): Attention resolution levels.
+        asinh_stretch (bool): Whether asinh stretch was used.
+        use_ema (bool): Whether EMA weights were used.
+
+    Returns:
+        str: Formatted summary string.
+    """
+    attn_str = str(attention_resolutions) if attention_resolutions else "none"
+    ema_str = "EMA" if use_ema else "no EMA"
+    asinh_str = "asinh" if asinh_stretch else "no asinh"
+    return (
+        f"{run_name} | epoch {epoch} | val_loss {val_loss:.4f} | "
+        f"{beta_schedule} | attn {attn_str} | {asinh_str} | {ema_str}"
+    )
+
+
 def save_images_to_dir(images, out_dir):
     """
     Save a batch of tensors as PNG files for optional visual inspection.
@@ -147,6 +179,8 @@ if __name__ == "__main__":
     asinh_scale = p.get("asinh_scale", 0.02)
     beta_schedule = p.get("beta_schedule", "cosine")
     morphology = p.get("morphology", "S")
+    use_ema = p.get("use_ema", False)
+    run_name = p.get("run_name", "run")
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     out_dir = os.path.join(project_dir, output_dir)
@@ -162,11 +196,11 @@ if __name__ == "__main__":
                      image_chw=(IMAGE_C, IMAGE_H, IMAGE_W),
                      beta_schedule=beta_schedule)
 
-    ckpt = torch.load(checkpoint_path, map_location=device)
+    ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
     state = ckpt["model_state_dict"] if "model_state_dict" in ckpt else ckpt
     ddpm.load_state_dict(state)
 
-    if "ema_shadow" in ckpt:
+    if use_ema and ckpt.get("ema_shadow") is not None:
         ema_shadow = ckpt["ema_shadow"]
         for name, param in ddpm.named_parameters():
             if name in ema_shadow:
@@ -176,9 +210,13 @@ if __name__ == "__main__":
         print("No EMA weights found in checkpoint, using raw model weights")
 
     ddpm.eval()
+    epoch = ckpt.get("epoch", 0)
+    val_loss = ckpt.get("val_loss", float("nan"))
     print(f"Model loaded from {checkpoint_path}")
-    print(f"  Checkpoint epoch: {ckpt.get('epoch', 'unknown')}  "
-          f"val_loss: {ckpt.get('val_loss', 'unknown'):.4f}")
+    print(f"  Checkpoint epoch: {epoch}  val_loss: {val_loss:.4f}")
+
+    run_info = build_run_info(run_name, epoch, val_loss, beta_schedule,
+                              attention_resolutions, asinh_stretch, use_ema)
 
     # --- Real data loader ---
     df = pd.read_csv(os.path.join(data_dir, catalog_file))
@@ -211,19 +249,30 @@ if __name__ == "__main__":
     with torch.no_grad():
         while n_generated < N_SAMPLES_FID:
             n_batch = min(BATCH_SIZE_GEN, N_SAMPLES_FID - n_generated)
-            batch = ddpm.generate(n_batch, IMAGE_C, IMAGE_H, IMAGE_W)
+            batch = ddpm.generate(n_batch, IMAGE_C, IMAGE_H, IMAGE_W,
+                                  asinh_stretch=asinh_stretch,
+                                  asinh_scale=asinh_scale)
             generated_images.append(batch.cpu())
             n_generated += n_batch
             print(f"  {n_generated}/{N_SAMPLES_FID}", end="\r")
     generated_images = torch.cat(generated_images, dim=0)
     print()
 
+    # --- Grid of generated images ---
+    print("Saving generated image grid...")
+    grid_path = os.path.join(out_dir, f"{run_name}_generated_{timestamp}.png")
+    show_images(generated_images[:N_SAMPLES_GRID],
+                suptitle=f"Generated images\n{run_info}",
+                save_path=grid_path, show=False)
+    print(f"Generated image grid saved to {grid_path}")
+
     # --- Pixel distribution ---
     print("Computing pixel distribution...")
-    dist_path = os.path.join(out_dir, f"pixel_distribution_{timestamp}.png")
+    dist_path = os.path.join(out_dir, f"{run_name}_pixel_distribution_{timestamp}.png")
     plot_pixel_distribution(
         real_images[:N_SAMPLES_DIST].cpu(),
         generated_images[:N_SAMPLES_DIST].cpu(),
+        run_info=run_info,
         save_path=dist_path, show=False
     )
 
@@ -253,7 +302,7 @@ if __name__ == "__main__":
     print(f"Density:   {dens:.4f}  Coverage: {cov:.4f}")
 
     # --- Save all results to a single file ---
-    results_path = os.path.join(out_dir, f"results_{timestamp}.txt")
+    results_path = os.path.join(out_dir, f"{run_name}_results_{timestamp}.txt")
     with open(results_path, "w") as f:
         f.write("=" * 60 + "\n")
         f.write("DDPM Evaluation Results\n")
@@ -262,6 +311,7 @@ if __name__ == "__main__":
         f.write("[Run configuration]\n")
         f.write(f"checkpoint:            {checkpoint_path}\n")
         f.write(f"timestamp:             {timestamp}\n")
+        f.write(f"run_name:              {run_name}\n")
         f.write(f"morphology:            {morphology}\n")
         f.write(f"beta_schedule:         {beta_schedule}\n")
         f.write(f"attention_resolutions: {attention_resolutions}\n")
@@ -275,8 +325,8 @@ if __name__ == "__main__":
         f.write("\n")
 
         f.write("[Checkpoint info]\n")
-        f.write(f"epoch:                 {ckpt.get('epoch', 'unknown')}\n")
-        f.write(f"val_loss:              {ckpt.get('val_loss', 'unknown')}\n")
+        f.write(f"epoch:                 {epoch}\n")
+        f.write(f"val_loss:              {val_loss}\n")
         f.write("\n")
 
         f.write("[Evaluation settings]\n")
@@ -307,7 +357,7 @@ if __name__ == "__main__":
     # --- Denoising GIF (optional) ---
     if args.gif:
         print("Generating denoising GIF...")
-        gif_path = os.path.join(out_dir, f"denoising_{timestamp}.gif")
+        gif_path = os.path.join(out_dir, f"{run_name}_denoising_{timestamp}.gif")
         make_denoising_gif(ddpm, loader, device, n_frames=30,
                            gif_path=gif_path, fps=10)
         print(f"GIF saved to {gif_path}")

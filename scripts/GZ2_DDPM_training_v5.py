@@ -15,8 +15,7 @@ import pandas as pd
 from tqdm import tqdm
 
 import torch
-from torch.utils.data import DataLoader, random_split
-import random
+
 from torchvision.transforms import (Compose, RandomHorizontalFlip,
                                     RandomVerticalFlip, Resize, ToTensor)
 from torchvision.transforms import functional as TF
@@ -252,7 +251,7 @@ if __name__ == "__main__":
     beta_schedule = p.get("beta_schedule", "cosine")
     ema_decay = p.get("ema_decay", 0.9999)
     asinh_stretch = p.get("asinh_stretch", False)
-    asinh_scale = p.get("asinh_scale", 0.2)
+    asinh_scale = p.get("asinh_scale", 0.02)
 
 
     val_freq = p.get("val_freq", 5)
@@ -310,10 +309,7 @@ if __name__ == "__main__":
     df_sub = df_sub.sample(n=n_total, random_state=SEED)
     logger.info(f"Dataset: {n_total} galaxies ({dataset_fraction*100:.0f}% of filtered set)")
 
-    # Images kept in [0, 1] (ToTensor only) — no Normalize.
-    # Augmentations: flips and discrete 90-degree rotations only. (Chat with David)
-    # Arbitrary-angle rotations are avoided because bilinear interpolation
-    # degrades the PSF of astronomical images.
+
     
     base_transforms = [AsinhStretch(asinh_scale)] if asinh_stretch else []
 
@@ -335,10 +331,19 @@ if __name__ == "__main__":
     full_dataset = GalaxyZooDataset(df_sub, data_dir, transform=None)
     train_size = int(len(full_dataset) * TRAIN_RATIO)
     val_size = len(full_dataset) - train_size
-    train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
-    train_dataset.dataset.transform = transform_train
-    val_dataset.dataset.transform = transform_val
 
+
+    indices = list(range(len(full_dataset)))
+    train_indices = indices[:train_size]
+    val_indices = indices[train_size:]
+
+    # Create datasets with transforms for training and validation
+    train_dataset = GalaxyZooDataset(df_sub.iloc[train_indices].reset_index(drop=True),
+                                    data_dir, transform=transform_train)
+    val_dataset = GalaxyZooDataset(df_sub.iloc[val_indices].reset_index(drop=True),
+                                    data_dir, transform=transform_val)
+
+    # DataLoader with custom collate_fn to handle potential None samples
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,
                               num_workers=NUM_WORKERS, pin_memory=True,
                               collate_fn=custom_collate)

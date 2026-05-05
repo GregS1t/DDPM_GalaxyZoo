@@ -4,7 +4,8 @@
 # Author: Grégory Sainton
 # Institution: Observatoire de Paris - PSL University
 
-import os, sys
+import os
+import sys
 import json
 import datetime
 
@@ -20,21 +21,20 @@ if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
 
-
-
-
 from ddpm import DDPMModel, compute_reference_quantiles
 from unet_v2 import UNetV2
 from viz import show_images, show_noising_sequence
 from galaxy_zoo_dataset import GalaxyZooDataset, custom_collate
 from gpu_utils import setup_device
 from transform_custom import AsinhStretch
+
+
 # ------------------------------------------------------------------
 # Constants
 # ------------------------------------------------------------------
-PARAMETERS_FILE = "configs/param_GZ2.json"
 N_SAMPLES = 16
 IMAGE_C, IMAGE_H, IMAGE_W = 3, 64, 64
+
 
 # ------------------------------------------------------------------
 # Entry point
@@ -51,7 +51,6 @@ if __name__ == "__main__":
     with open(args.params, "r") as f:
         p = json.load(f)
 
-    # Read parameters from json file
     n_steps = p["n_steps"]
     min_beta = p["beta_start"]
     max_beta = p["beta_end"]
@@ -65,40 +64,41 @@ if __name__ == "__main__":
     histogram_matching = p.get("histogram_matching", False)
     attention_resolutions = p.get("attention_resolutions", [8, 16])
     beta_schedule = p.get("beta_schedule", "cosine")
-
+    use_ema = p.get("use_ema")
+    run_name = p.get("run_name", "run")
 
     device = setup_device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    # --- Real galaxy dataset (used for reference quantiles and noising sequence) ---
+    # --- Real galaxy dataset ---
     df = pd.read_csv(os.path.join(data_dir, catalog_file))
     df_mapping = pd.read_csv(os.path.join(data_dir, mapping_file))
-
-    # For now we keep all galaxies regardless of morphology.
     df_spiral = pd.merge(
         df[df["gz2_class"].str.startswith("S")],
         df_mapping, left_on="dr7objid", right_on="objid"
     ).sample(n=1280, random_state=42)
 
+    # Transform with asinh for training-compatible display and noising sequence
     base_transforms = [AsinhStretch(asinh_scale)] if asinh_stretch else []
+    transform_asinh = Compose([Resize((IMAGE_H, IMAGE_W)), ToTensor(), *base_transforms])
 
-    transform = Compose([
-        Resize((IMAGE_H, IMAGE_W)),
-        ToTensor(),
-        *base_transforms,])
+    # Transform without asinh for reference quantiles (must match generate() output space)
+    transform_linear = Compose([Resize((IMAGE_H, IMAGE_W)), ToTensor()])
 
-    dataset = GalaxyZooDataset(df_spiral, data_dir, transform=transform)
+    dataset_asinh = GalaxyZooDataset(df_spiral, data_dir, transform=transform_asinh)
+    dataset_linear = GalaxyZooDataset(df_spiral, data_dir, transform=transform_linear)
 
-    ref_loader = DataLoader(dataset, batch_size=64, shuffle=False,
-                            collate_fn=custom_collate)
-    noising_loader = DataLoader(dataset, batch_size=1, shuffle=False,
+    noising_loader = DataLoader(dataset_asinh, batch_size=1, shuffle=False,
                                 collate_fn=custom_collate)
 
-
     if histogram_matching:
+        # [BUG FIX] Reference quantiles must be computed in linear space to match
+        # the output space of generate() after asinh inversion.
+        ref_loader = DataLoader(dataset_linear, batch_size=64, shuffle=False,
+                                collate_fn=custom_collate)
         reference_quantiles = compute_reference_quantiles(ref_loader,
                                                           n_quantiles=256,
                                                           n_batches=20)
-        print("Reference quantiles computed for histogram matching")
+        print("Reference quantiles computed in linear space for histogram matching")
     else:
         reference_quantiles = None
 
@@ -110,11 +110,11 @@ if __name__ == "__main__":
                      image_chw=(IMAGE_C, IMAGE_H, IMAGE_W),
                      beta_schedule=beta_schedule)
 
-    ckpt = torch.load(checkpoint_path, map_location=device)
+    ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
     state = ckpt["model_state_dict"] if "model_state_dict" in ckpt else ckpt
     ddpm.load_state_dict(state)
-    # Apply EMA weights for smoother inference if available in the checkpoint
-    if "ema_shadow" in ckpt:
+
+    if use_ema and ckpt.get("ema_shadow") is not None:
         ema_shadow = ckpt["ema_shadow"]
         for name, param in ddpm.named_parameters():
             if name in ema_shadow:
@@ -128,20 +128,22 @@ if __name__ == "__main__":
 
     # --- Generate ---
     images = ddpm.generate(N_SAMPLES, IMAGE_C, IMAGE_H, IMAGE_W,
-                       reference_quantiles=reference_quantiles)
+                           reference_quantiles=reference_quantiles,
+                           asinh_stretch=asinh_stretch,
+                           asinh_scale=asinh_scale,
+                           histogram_matching=histogram_matching)
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    os.makedirs(os.path.join(project_dir, output_dir), exist_ok=True)
+    out_dir = os.path.join(project_dir, output_dir)
+    os.makedirs(out_dir, exist_ok=True)
 
-    save_path = os.path.join(project_dir, output_dir,
-                             f"generated_GZ2_{timestamp}.png")
+    save_path = os.path.join(out_dir, f"{run_name}_generated_{timestamp}.png")
     show_images(images, suptitle="Generated Galaxy Zoo 2 images",
                 save_path=save_path, show=True)
     print(f"Saved to {save_path}")
 
-    # --- Noising sequence on one real galaxy ---
-    # noise_path = os.path.join(project_dir, output_dir,
-    #                           f"noising_sequence_{timestamp}.png")
+    # --- Noising sequence on one real galaxy (optional) ---
+    # noise_path = os.path.join(out_dir, f"{run_name}_noising_sequence_{timestamp}.png")
     # show_noising_sequence(ddpm, noising_loader, device, n_steps=10,
     #                       save_path=noise_path, show=True)
-    #print(f"Noising sequence saved to {noise_path}")
+    # print(f"Noising sequence saved to {noise_path}")
