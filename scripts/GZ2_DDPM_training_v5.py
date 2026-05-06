@@ -20,6 +20,7 @@ from torchvision.transforms import (Compose, RandomHorizontalFlip,
                                     RandomVerticalFlip, Resize, ToTensor)
 from torchvision.transforms import functional as TF
 from torch.utils.tensorboard import SummaryWriter
+from torch.utils.data import DataLoader
 
 # AMP compatibility: torch.amp.GradScaler / autocast available from PyTorch 2.3.
 # Fall back to torch.cuda.amp for older versions (e.g. 2.0.x on some clusters).
